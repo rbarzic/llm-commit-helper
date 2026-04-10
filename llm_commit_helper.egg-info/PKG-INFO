@@ -34,17 +34,31 @@ No extra Python packages are required. Run directly from the source tree.
 
 ---
 
+## Installation
+
+```sh
+pip install -e /path/to/llm-commit-helper
+```
+
+Or from inside the project directory:
+
+```sh
+pip install -e .
+# or
+make install
+```
+
 ## Quick start
 
 ```sh
 # From inside a git repository, with staged changes:
-PYTHONPATH=/path/to/llm-commit-helper python -m llm_commit_helper
+llm-commit-helper
 ```
 
 Pipe the output to an LLM to generate a commit message:
 
 ```sh
-PYTHONPATH=/path/to/llm-commit-helper python -m llm_commit_helper | llm "Write a commit message"
+llm-commit-helper | llm "Write a commit message"
 ```
 
 ---
@@ -227,6 +241,8 @@ always shows the actual character count of the output produced.
 ```sh
 cd support/local/llm-commit-helper
 python -m pytest tests/ -v
+# or
+make test
 ```
 
 Tests use `pytest` with `unittest.mock` for all subprocess calls — no git
