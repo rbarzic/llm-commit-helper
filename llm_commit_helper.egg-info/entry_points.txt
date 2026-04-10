@@ -1,0 +1,2 @@
+[console_scripts]
+llm-commit-helper = llm_commit_helper.cli:main

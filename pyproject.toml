@@ -1,0 +1,21 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "llm-commit-helper"
+version = "0.1.0"
+description = "LLM-friendly replacement for git diff --staged"
+requires-python = ">=3.11"
+readme = "README.md"
+license = { text = "MIT" }
+
+[project.scripts]
+llm-commit-helper = "llm_commit_helper.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["llm_commit_helper*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

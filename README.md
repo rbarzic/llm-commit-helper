@@ -1,0 +1,268 @@
+# llm-commit-helper
+
+A smarter replacement for `git diff --staged`, designed to feed LLMs a clean,
+size-bounded summary of staged changes rather than raw diff noise.
+
+The core problem with `git diff --staged` for LLM commit message generation:
+
+- Large files (netlists, SVD files) flood the context window
+- Reformatted Python files produce massive diffs with zero logic change
+- Verilog AUTO-expanded sections (`AUTOWIRE`, `AUTOINST`, …) produce long,
+  order-dependent diffs that obscure real changes
+- Submodule updates show only a hash pair — no indication of what actually changed
+
+`llm-commit-helper` handles all of these.
+
+---
+
+## Requirements
+
+- Python 3.11+
+- `git` in `PATH`
+- Optional: `black` (for Python formatting isolation)
+- Optional: `emacs` with `verilog-mode` (for Verilog AUTO stripping)
+
+No extra Python packages are required. Run directly from the source tree.
+
+---
+
+## Installation
+
+```sh
+pip install -e /path/to/llm-commit-helper
+```
+
+Or from inside the project directory:
+
+```sh
+pip install -e .
+# or
+make install
+```
+
+## Quick start
+
+```sh
+# From inside a git repository, with staged changes:
+llm-commit-helper
+```
+
+Pipe the output to an LLM to generate a commit message:
+
+```sh
+llm-commit-helper | llm "Write a commit message"
+```
+
+---
+
+## Options
+
+| Flag | Description |
+|---|---|
+| `--config PATH` | Use a specific config file instead of searching the hierarchy |
+| `--max-total-size SIZE` | Override the output size limit (e.g. `500`, `10KB`, `1MB`) |
+| `-v`, `--verbose` | Print diagnostics to stderr (git root, config file used, budget) |
+
+---
+
+## Output format
+
+```
+=== Staged Changes Summary ===
+Files: 8 total (4 modified, 2 added, 1 excluded, 1 submodule)
+Config: /home/user/project/config.jsonc
+
+--- File: src/foo.py [modified] ---
+@@ -10,6 +10,8 @@
+ ...
+
+--- File: src/bar.py [modified] [formatting-only] ---
+[no logic changes - formatting only]
+
+--- File: chip.netlist.v [excluded] ---
+[changed - excluded by rule]
+
+--- File: data/blob.bin [binary] ---
+[binary file changed]
+
+--- File: include/new_header.h [added] ---
+[new file - contents not shown]
+
+--- Submodule: support/imported/socbuilder ---
+Updated: b2ae0f8 -> 153b625
+  153b625 Update create_svd.py
+  bfee9c1 feat(latex): Add LaTeX table generation
+
+=== End of Staged Changes (3842 chars) ===
+```
+
+Diagnostic messages (config warnings, fallback notices) go to **stderr**.
+The staged-changes summary goes to **stdout**, so it can be piped cleanly.
+
+---
+
+## File handling
+
+### Added files
+New files are reported as `[added]` with no content. Adding file content to a
+commit message prompt is rarely useful and wastes context budget.
+
+### Deleted files
+Reported as `[deleted]` with no diff shown.
+
+### Binary files
+Detected via `git diff --numstat` (shows `-  -` for binary). Reported as
+`[binary file changed]`.
+
+### Excluded files
+Files matching an `exclude` pattern in the config are reported as
+`[changed - excluded by rule]`. Useful for generated files, netlists, or
+anything too noisy to be useful in a commit message.
+
+### Files exceeding max_file_size
+Reported as `[changed - file too large]`. Default threshold: 200 MB.
+
+### Submodules
+For each updated submodule, the output includes a `git log --oneline` of the
+commits between the old and new hash. If the submodule is not initialized on
+disk, a warning is printed to stderr and the section is skipped.
+
+---
+
+## Smart formatters
+
+### Python (`.py`)
+Runs `black --quiet` on temporary copies of both the old and new versions of
+the file, then diffs the formatted results. If the formatted versions are
+identical, the file is marked `[formatting-only]` and no diff is shown. This
+suppresses the large diffs produced by `black` reformatting passes.
+
+Falls back to generic formatting if `black` is not installed.
+
+### Verilog (`.v`, `.sv`)
+Detects files using AUTO macros (`AUTOARG`, `AUTOINPUT`, `AUTOOUTPUT`,
+`AUTOINST`, `AUTOWIRE`, `AUTOREG`, …). When found, runs
+`emacs --batch -f verilog-batch-delete-auto -f save-buffer` on temporary copies
+of both versions to **delete** the AUTO-generated sections before diffing.
+
+This is the correct approach: diffing the hand-written source (before AUTO
+expansion) rather than the expanded output, which is order-dependent and
+produces spurious diffs even when nothing real changed.
+
+Falls back to generic formatting if `emacs` is not installed or if no AUTO
+macros are detected.
+
+### Generic (all other files)
+Per-hunk whitespace normalization: strips leading/trailing whitespace and
+collapses internal runs of spaces/tabs, then checks if normalized removed and
+added lines are equal. Hunks that are whitespace-only are annotated
+`[formatting-only]` inline in the diff.
+
+---
+
+## Configuration
+
+`llm-commit-helper` searches for `config.jsonc` starting from the current
+working directory, walking up to the git root, then falling back to a global
+location. The first file found wins.
+
+**Search order:**
+
+1. `<cwd>/config.jsonc`
+2. `<cwd>/.llm-commit-helper/config.jsonc`
+3. Same two patterns repeated for each parent directory up to the git root
+4. `~/.config/llm-commit-helper/config.jsonc`
+
+To skip the search and use a specific file:
+
+```sh
+python -m llm_commit_helper --config /path/to/my-config.jsonc
+```
+
+### Config file format
+
+The file is JSONC — standard JSON with `//` line comments and trailing commas
+allowed.
+
+```jsonc
+{
+  "version": 1,
+  "rules": {
+    // Glob patterns for files to suppress (report as 'changed' only)
+    "exclude": [
+      "sim/firmware_ctests/**",
+      "atpg/from_genus_1d-comp-sdf/chip.test_netlist.v",
+      "*.netlist.v"
+    ],
+
+    // Files larger than this are suppressed (supports B, KB, MB, GB)
+    "max_file_size": "200MB",
+
+    // Total output budget; truncates with a summary when exceeded
+    "max_total_size": 20000,
+  }
+}
+```
+
+### Defaults (no config file)
+
+| Setting | Default |
+|---|---|
+| `exclude` | `[]` (nothing excluded) |
+| `max_file_size` | `200MB` |
+| `max_total_size` | `20000` (chars) |
+
+### Size values
+
+`max_file_size` and `max_total_size` accept:
+
+- Plain integers: `20000`
+- Suffixed strings: `200MB`, `20KB`, `1GB`, `4096B`
+- `max_total_size` on the CLI (`--max-total-size`) accepts the same formats
+
+### Output truncation
+
+When the accumulated output exceeds `max_total_size`, remaining files are
+listed by name only, followed by an `[OUTPUT TRUNCATED]` notice. The footer
+always shows the actual character count of the output produced.
+
+---
+
+## Running tests
+
+```sh
+cd support/local/llm-commit-helper
+python -m pytest tests/ -v
+# or
+make test
+```
+
+Tests use `pytest` with `unittest.mock` for all subprocess calls — no git
+repository or external tools required.
+
+---
+
+## Project layout
+
+```
+llm_commit_helper/
+├── __main__.py          # python -m llm_commit_helper entry point
+├── cli.py               # argument parsing and main pipeline
+├── config.py            # JSONC loading and hierarchical config search
+├── git_staged.py        # staged file listing and classification
+├── submodule.py         # submodule log retrieval and formatting
+├── diff_engine.py       # difflib wrapper with formatting-only annotation
+├── output.py            # size-budgeted output assembly
+├── utils.py             # subprocess, size parsing, glob matching
+└── formatters/
+    ├── __init__.py      # extension-based dispatcher
+    ├── generic_fmt.py   # whitespace normalization
+    ├── python_fmt.py    # black-based logic/formatting separation
+    └── verilog_fmt.py   # emacs AUTO deletion
+tests/
+├── test_config.py
+├── test_formatters.py
+├── test_git_staged.py
+├── test_output.py
+└── test_submodule.py
+```
