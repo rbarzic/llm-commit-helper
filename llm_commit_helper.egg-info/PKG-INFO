@@ -2,7 +2,18 @@ Metadata-Version: 2.4
 Name: llm-commit-helper
 Version: 0.1.0
 Summary: LLM-friendly replacement for git diff --staged
-License: MIT
+Author-email: Ronan Barzic <rbarzic@gmail.com>
+License-Expression: MIT
+Project-URL: Homepage, https://github.com/rbarzic/llm-commit-helper
+Project-URL: Repository, https://github.com/rbarzic/llm-commit-helper
+Keywords: git,llm,commit,diff,ai
+Classifier: Development Status :: 3 - Alpha
+Classifier: Environment :: Console
+Classifier: Intended Audience :: Developers
+Classifier: Programming Language :: Python :: 3
+Classifier: Programming Language :: Python :: 3.11
+Classifier: Programming Language :: Python :: 3.12
+Classifier: Topic :: Software Development :: Version Control :: Git
 Requires-Python: >=3.11
 Description-Content-Type: text/markdown
 

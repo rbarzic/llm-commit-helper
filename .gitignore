@@ -2,3 +2,6 @@
 /llm_commit_helper/formatters/__pycache__/
 /tests/__pycache__/
 /CLAUDE.md
+/.venv/
+/dist/
+/build/

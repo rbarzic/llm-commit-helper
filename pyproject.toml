@@ -8,7 +8,22 @@ version = "0.1.0"
 description = "LLM-friendly replacement for git diff --staged"
 requires-python = ">=3.11"
 readme = "README.md"
-license = { text = "MIT" }
+license = "MIT"
+authors = [{ name = "Ronan Barzic", email = "rbarzic@gmail.com" }]
+keywords = ["git", "llm", "commit", "diff", "ai"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development :: Version Control :: Git",
+]
+
+[project.urls]
+Homepage = "https://github.com/rbarzic/llm-commit-helper"
+Repository = "https://github.com/rbarzic/llm-commit-helper"
 
 [project.scripts]
 llm-commit-helper = "llm_commit_helper.cli:main"

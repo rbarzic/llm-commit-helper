@@ -3,6 +3,10 @@
 # Works from any directory — HELPER_DIR is always the Makefile's own location.
 HELPER_DIR := $(dir $(abspath $(lastword $(MAKEFILE_LIST))))
 
+VENV     := $(HELPER_DIR).venv
+PYTHON   := $(VENV)/bin/python
+PIP      := $(VENV)/bin/pip
+
 PROMPT_FILE ?= $(HELPER_DIR)prompt_example.txt
 
 # LLM settings — defaults match the vllm-lan provider in opencode.json
@@ -32,15 +36,34 @@ diff:
 diff-verbose:
 	@llm-commit-helper --verbose
 
+$(VENV):
+	python3 -m venv $(VENV)
+	$(PIP) install build twine
+
 .PHONY: install
 ## Install the package in editable mode (pip install -e .)
-install:
-	pip install -e $(HELPER_DIR)
+install: $(VENV)
+	$(PIP) install -e $(HELPER_DIR)
 
 .PHONY: test
 ## Run the unit test suite
-test:
-	cd $(HELPER_DIR) && python -m pytest tests/ -v
+test: $(VENV)
+	cd $(HELPER_DIR) && $(PYTHON) -m pytest tests/ -v
+
+.PHONY: build
+## Build source distribution and wheel (output in dist/)
+build: $(VENV)
+	cd $(HELPER_DIR) && $(PYTHON) -m build
+
+.PHONY: publish
+## Upload to PyPI (requires twine and a valid ~/.pypirc or TWINE_* env vars)
+publish: build
+	cd $(HELPER_DIR) && $(PYTHON) -m twine upload dist/*
+
+.PHONY: publish-test
+## Upload to TestPyPI first (safe dry-run before a real release)
+publish-test: build
+	cd $(HELPER_DIR) && $(PYTHON) -m twine upload --repository testpypi dist/*
 
 .PHONY: help
 help:
@@ -53,6 +76,9 @@ help:
 	@echo ""
 	@echo "Targets:"
 	@echo "  install       pip install -e . (editable install)"
+	@echo "  build         Build sdist + wheel into dist/"
+	@echo "  publish       Build and upload to PyPI"
+	@echo "  publish-test  Build and upload to TestPyPI"
 	@echo "  commit        Generate a commit message via opencode"
 	@echo "  diff          Show the processed diff without calling the LLM"
 	@echo "  diff-verbose  Same as diff with diagnostic output"
